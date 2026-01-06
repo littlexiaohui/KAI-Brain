@@ -169,5 +169,13 @@ print(f"\n完成: {synced} 个文档")
 print(f"  更新: {updated} 个")
 print(f"  无变化: {skipped} 个")
 
+# 固定工作流：自动更新索引
+print("\n[自动更新知识库索引...]")
+import subprocess
+result = subprocess.run(['python3', 'gen_index.py'], capture_output=True, text=True)
+print(result.stdout)
+if result.returncode != 0:
+    print(f"⚠️ 索引更新失败: {result.stderr}")
+
 if args.force:
     print("\n[强制模式] 已忽略时间戳，全部重新同步")
