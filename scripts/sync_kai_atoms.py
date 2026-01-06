@@ -9,8 +9,8 @@ import requests
 import markdown
 from dotenv import load_dotenv
 
-# 加载环境变量
-load_dotenv()
+# 加载环境变量（从 config/.env）
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', '.env'))
 
 # 配置
 APP_ID = os.getenv("FEISHU_APP_ID")
@@ -406,6 +406,21 @@ class FeishuSync:
         actual_title = self.get_document_title(doc_token)
         if actual_title and actual_title != "untitled":
             title = actual_title
+        else:
+            # 如果飞书返回 untitled，尝试从 STATE_FILE 恢复原有标题
+            if os.path.exists(STATE_FILE):
+                try:
+                    with open(STATE_FILE, 'r', encoding='utf-8') as f:
+                        state = json.load(f)
+                    if doc_token in state and state[doc_token].get('filename'):
+                        # 从已有文件名提取标题（去掉 .md 后缀）
+                        old_filename = state[doc_token]['filename']
+                        old_title = old_filename.replace('.md', '')
+                        if old_title and old_title != 'untitled':
+                            print(f"  ↳ 从记录恢复标题: {old_title}")
+                            title = old_title
+                except:
+                    pass
 
         # 清理文件名
         safe_title = "".join(c if c.isalnum() or c in " -_" else "_" for c in title)
@@ -418,8 +433,25 @@ class FeishuSync:
             # 转换为 Markdown
             md_content = self.convert_blocks_to_markdown(blocks, doc_token)
 
-            # 保存文件
+            # 处理文件名冲突
             filepath = os.path.join(output_dir, f"{safe_title}.md")
+            counter = 1
+            while os.path.exists(filepath):
+                # 如果文件已存在且内容相同，跳过
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        existing_content = f.read()
+                    if existing_content == md_content:
+                        print(f"○ 无变化: {title}")
+                        return
+                except:
+                    pass
+                # 文件名冲突，加上序号区分
+                safe_title = f"{safe_title}_{counter}"
+                filepath = os.path.join(output_dir, f"{safe_title}.md")
+                counter += 1
+
+            # 保存文件
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write(md_content)
 

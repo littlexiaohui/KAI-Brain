@@ -3,7 +3,7 @@
 
 import os, requests, re, json, time
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', '.env'))
 
 APP_ID = os.getenv('FEISHU_APP_ID')
 APP_SECRET = os.getenv('FEISHU_APP_SECRET')
@@ -150,10 +150,8 @@ updated = 0
 skipped = 0
 
 if args.full:
-    # 全量同步：先清空状态，重新同步所有
-    if os.path.exists(STATE_FILE):
-        os.remove(STATE_FILE)
-    print("[全量同步模式]")
+    # 全量同步：不清空状态，但强制重新检查每个文档
+    print("[全量同步模式] - 强制检查所有文档")
 
 for t in unique:
     title, is_updated = sync_one(t, force=args.force)
