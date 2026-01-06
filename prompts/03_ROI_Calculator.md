@@ -1,3 +1,15 @@
+---
+type: Cognitive_Tool
+layer: L2_Operator
+interaction_mode: One_Shot
+risk_level: High
+trigger_condition:
+  - "做不做"、"投不投"、"选哪个"
+  - ROI、算账、投入产出
+conflict_rule:
+  - 需先确认信息充足
+---
+
 # KAI Skill: 科学决策 ROI 评估师 (The ROI Triangle)
 
 ## 1. 核心指令 (Core Instruction)

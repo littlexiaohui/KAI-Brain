@@ -1,6 +1,7 @@
 ---
 type: Interaction_Flow
 layer: L1_Control
+risk_level: Medium
 interaction_mode: Session_Based
 trigger_condition:
   - 设计课程

@@ -14,11 +14,11 @@
 * **原则**：能用工具解决的，不进入长流程。
 
 ### 次级判断 L1 (交互流)
-如果用户意图模糊，或需要从零策划，调用 L1 (`01_task_decomposition`)。
+如果用户意图模糊，或需要从零策划，调用 L1 (`01_Task_Decompose` 或 `04_Course_Design`)。
 * **原则**：进入 L1 后，将对话主导权交给该 Prompt，直到产出方案。
 
 ### 兜底 L0 (基础思维)
-既不符合 L2 也不符合 L1，调用 `00_basic_thinking`。
+既不符合 L2 也不符合 L1，调用 `00_Basic_Chat`。
 
 ## 3. 记忆融合 (Context Injection)
 在执行任何 Prompt 时，你必须：

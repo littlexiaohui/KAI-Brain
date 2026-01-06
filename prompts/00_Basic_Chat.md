@@ -1,3 +1,15 @@
+---
+type: Basic_Tool
+layer: L0_Brain
+interaction_mode: One_Shot
+trigger_condition:
+  - 通用问答
+  - 闲聊
+  - 整理思路
+conflict_rule:
+  - L1/L2 优先级更高
+---
+
 # KAI Skill: 基础思维兜底 (Basic Thinking Engine)
 
 ## 1. 核心指令 (Core Instruction)
