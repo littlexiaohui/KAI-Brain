@@ -1,0 +1,20 @@
+# KAI 知识库 RAG 系统依赖
+# Phase 2: 向量检索 + AI 对话
+
+# 基础依赖
+requests>=2.31.0
+python-dotenv>=1.0.0
+markdown>=4.0.0
+
+# LangChain 核心
+langchain>=0.2.0
+langchain-community>=0.2.0
+
+# 向量数据库
+chromadb>=0.5.0
+
+# AI 模型 - 本地 Embedding
+langchain-huggingface>=0.1.0  # HuggingFace embeddings
+
+# 文本处理
+sentence-transformers>=2.2.0  # 用于本地 embeddings
