@@ -8,7 +8,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', '
 APP_ID = os.getenv('FEISHU_APP_ID')
 APP_SECRET = os.getenv('FEISHU_APP_SECRET')
 FEISHU_API_BASE = "https://open.feishu.cn/open-apis"
-KB_DIR = "knowledge_base/40-Articles"  # 飞书同步的长文章存入 40-Articles
+KB_DIR = "knowledge_base/05-Workbench/Feishu_Sync"  # 飞书同步的"生肉"存入冷库
 STATE_FILE = ".sync_state.json"
 
 def get_token():
@@ -129,6 +129,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--force', action='store_true', help='强制同步所有文档')
 parser.add_argument('--full', action='store_true', help='全量同步（重新同步所有文档）')
 args = parser.parse_args()
+
+# 确保目标目录存在
+os.makedirs(KB_DIR, exist_ok=True)
 
 # 读取 tokens
 with open('docs_list.txt') as f:
