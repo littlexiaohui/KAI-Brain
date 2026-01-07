@@ -8,7 +8,7 @@ load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config', '
 APP_ID = os.getenv('FEISHU_APP_ID')
 APP_SECRET = os.getenv('FEISHU_APP_SECRET')
 FEISHU_API_BASE = "https://open.feishu.cn/open-apis"
-KB_DIR = "knowledge_base"
+KB_DIR = "knowledge_base/40-Articles"  # 飞书同步的长文章存入 40-Articles
 STATE_FILE = ".sync_state.json"
 
 def get_token():
