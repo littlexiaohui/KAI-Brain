@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-KAI 图书管理员 v2.0 (防偷懒版)
-功能：智能处理 PDF，生成结构化 Markdown 笔记
-支持：文字版 PDF（直接提取）+ 扫描版 PDF（OCR 识别）
+KAI 全文搬运工 v3.0
+功能：提取 PDF 全文，保留原汁原味，只做排版修复
 
 使用：
     python3 scripts/scan_library.py
@@ -13,8 +12,6 @@ import shutil
 import pdfplumber
 from zhipuai import ZhipuAI
 from datetime import datetime
-from PIL import Image
-import pytesseract
 import re
 
 # ================= 配置区 =================
@@ -42,122 +39,57 @@ for folder in [INPUT_FOLDER, OUTPUT_FOLDER, ARCHIVE_FOLDER]:
     os.makedirs(folder, exist_ok=True)
 
 
-def extract_page_text(page):
-    """单页提取：优先文字，失败则 OCR"""
-    # 1. 尝试直接提取文字
-    text = page.extract_text()
-    if text and len(text) > 50:
-        return text, "text"
-
-    # 2. 扫描版，尝试 OCR
-    try:
-        img = page.to_image(resolution=150).original
-        ocr_text = pytesseract.image_to_string(img, lang='chi_sim+eng')
-        if ocr_text and len(ocr_text) > 30:
-            return ocr_text, "ocr"
-    except Exception as e:
-        pass
-
-    return None, "none"
-
-
-def extract_text_smartly(pdf_path):
-    """
-    智能提取：
-    - <50页：全提取
-    - >50页：前30页 + 后5页（三明治切片）
-    - 扫描版自动 OCR
-    """
+def extract_text(pdf_path):
+    """直接提取全文，不切片，有多少拿多少"""
     full_text = ""
-    ocr_pages = 0
-
     try:
         with pdfplumber.open(pdf_path) as pdf:
             total_pages = len(pdf.pages)
-            print(f"   📄 共 {total_pages} 页...")
-
-            if total_pages < 50:
-                # 全读
-                for i, page in enumerate(pdf.pages):
-                    text, method = extract_page_text(page)
-                    if text:
-                        full_text += text + "\n"
-                        if method == "ocr":
-                            ocr_pages += 1
-                            print(f"   📷 第 {i+1} 页 OCR")
-            else:
-                # 三明治切片
-                print("   ✂️ 书籍较长，启动'三明治切片'模式...")
-
-                # 前 30 页
-                for i in range(min(30, total_pages)):
-                    text, method = extract_page_text(pdf.pages[i])
-                    if text:
-                        full_text += text + "\n"
-                        if method == "ocr":
-                            ocr_pages += 1
-                            print(f"   📷 第 {i+1} 页 OCR")
-
-                full_text += "\n\n......(中间案例省略)......\n\n"
-
-                # 后 5 页
-                for i in range(max(30, total_pages - 5), total_pages):
-                    text, method = extract_page_text(pdf.pages[i])
-                    if text:
-                        full_text += text + "\n"
-                        if method == "ocr":
-                            ocr_pages += 1
-                            print(f"   📷 第 {i+1} 页 OCR")
-
-        if ocr_pages > 0:
-            print(f"   📷 共 OCR 识别 {ocr_pages} 页")
-
-        return full_text if full_text.strip() else None
-
+            print(f"   📄 共 {total_pages} 页，正在全量提取...")
+            for page in pdf.pages:
+                extract = page.extract_text()
+                if extract:
+                    full_text += extract + "\n\n"
+        return full_text
     except Exception as e:
         print(f"   ❌ 读取失败: {e}")
         return None
 
 
-def summarize_with_glm(content, filename):
+def format_full_text(content, filename):
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # 强制截断保护
-    if len(content) > 60000:
-        content = content[:50000] + "\n...(中间过长截断)...\n" + content[-5000:]
-        print(f"   ⚠️ 文本过长，已压缩至 {len(content)} 字符")
+    # 截断保护
+    if len(content) > 80000:
+        print(f"   ⚠️ 文本过长({len(content)}字)，将只处理前 8万字...")
+        content = content[:80000]
 
     prompt = f"""
     # Role
-    你是KAI系统的首席图书管理员。你的任务是强制从文本中提炼干货，**严禁偷懒**。
+    你是一位专业的书籍排版员。
 
     # Task
-    阅读以下文档（可能是书籍的精选片段），生成一份深度 Markdown 笔记。
-    **即使文本显示不完整，也要基于现有内容进行最大程度的总结，绝对不要输出“由于文档过长无法生成”之类的废话。**
+    我给你的是一段从 PDF 识别出来的原始文本，格式很乱（断行、缺乏标题符号）。
+    请帮我把它整理成干净的 Markdown 格式。
 
-    # Output Template
-    # {{标题}}
+    # Rules (严格执行)
+    1. **保留全文**：❌ 绝对不要总结！❌ 绝对不要删减！✅ 必须保留原文的所有细节和案例。
+    2. **恢复结构**：根据上下文，识别出章节标题，并加上 Markdown 的标题符号（# 一级标题, ## 二级标题）。
+    3. **修复排版**：
+       - 把被 PDF 强制截断的段落合并。
+       - 把列表项修复为标准的 bullet points (- )。
+       - 识别出文中的表格，尽可能还原为 Markdown 表格。
+    4. **元数据**：在文首保留 KAI 的标准元数据头。
 
+    # Meta Data Structure
+    # {{文档标题}}
     > 📂 来源：{filename}
-    > 🏷️ 标签：#PDF #阅读笔记 {{自动补充2个标签}}
+    > 🏷️ 标签：#全文档 #PDF原件
     > 📅 日期：{today}
 
-    ## 1. 核心摘要 (一句话讲透)
-    (用最直白的语言概括这本书解决了什么痛点)
-
-    ## 2. 关键洞察 (Key Insights)
-    - 💡 **洞察1**：...
-    - 💡 **洞察2**：...
-    - 💡 **洞察3**：...
-
-    ## 3. 核心章节脉络
-    (基于读取到的内容，整理逻辑大纲)
-
-    ## 4. KAI 行动建议
-    (给读者的3个具体执行动作)
-
     ---
-    # 输入文本
+
+    # Input Text
     {content}
     """
 
@@ -165,11 +97,11 @@ def summarize_with_glm(content, filename):
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
+            temperature=0.1,  # 温度设极低，确保只做搬运
         )
         return response.choices[0].message.content
     except Exception as e:
-        print(f"   ❌ GLM 请求失败: {e}")
+        print(f"   ❌ GLM 排版请求失败: {e}")
         return None
 
 
@@ -180,7 +112,7 @@ def sanitize_filename(name):
 
 
 def main():
-    print("📚 KAI 图书管理员 v2.0 (防偷懒版) 启动...")
+    print("📚 KAI 全文搬运工 v3.0 启动...")
     files = [f for f in os.listdir(INPUT_FOLDER) if f.lower().endswith('.pdf')]
 
     if not files:
@@ -191,26 +123,25 @@ def main():
         print(f"\n📖 处理中: {file} ...")
         pdf_path = os.path.join(INPUT_FOLDER, file)
 
-        # 1. 提取
-        text_content = extract_text_smartly(pdf_path)
-        if not text_content or len(text_content) < 100:
-            print("   ⚠️ 内容太少或无法提取，跳过。")
+        # 1. 提取全文
+        text_content = extract_text(pdf_path)
+        if not text_content:
             continue
 
-        print(f"   🧠 提取字符数: {len(text_content)}，正在发送给 GLM...")
+        print(f"   🧠 原文共 {len(text_content)} 字符，正在 AI 排版重构...")
 
-        # 2. AI 总结
-        summary = summarize_with_glm(text_content, file)
+        # 2. AI 排版 (不做总结)
+        formatted_md = format_full_text(text_content, file)
 
-        if summary:
-            # 3. 保存
+        if formatted_md:
+            # 3. 保存（加 Full_ 前缀）
             safe_name = sanitize_filename(file.replace(".pdf", "").replace(".PDF", ""))
-            md_filename = f"Library_{safe_name}.md"
+            md_filename = f"Full_{safe_name}.md"
             save_path = os.path.join(OUTPUT_FOLDER, md_filename)
 
             with open(save_path, "w", encoding="utf-8") as f:
-                f.write(summary)
-            print(f"   ✅ 笔记已生成: {md_filename}")
+                f.write(formatted_md)
+            print(f"   ✅ 全文已提取: {md_filename}")
 
             # 4. 归档
             shutil.move(pdf_path, os.path.join(ARCHIVE_FOLDER, file))
