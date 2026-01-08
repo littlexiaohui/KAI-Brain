@@ -1,17 +1,17 @@
 # KAI 知识库 RAG 系统
 
-> 版本：v2.2 | 构建日期：2026-01-08
+> 版本：v2.3 | 构建日期：2026-01-08
 
-KAI 是一个基于飞书云文档的本地知识库 RAG (Retrieval-Augmented Generation) 系统，支持多平台文档同步、本地向量化存储和智能问答。
+KAI 是一个基于多源内容的本地知识库 RAG 系统，支持多平台文档同步、AI 内容拆解和 PDF 全文提取。
 
 ## 功能特性
 
 | 模块 | 功能 | 状态 |
 |------|------|------|
-| 多平台同步 | 小红书、公众号、抖音 → KAI_Brain | ✅ |
-| 格式清理 | 自动修复标题、列表、空行等问题 | ✅ |
+| 多平台同步 | 飞书多维表 → KAI_Brain（小红书/公众号/抖音） | ✅ |
+| 视频号拆解 | DeepSeek-R1 逐字稿分析 → douyin/ | ✅ |
+| PDF 全文提取 | GLM-4.6 排版修复 → library/ | ✅ |
 | 向量化 | 本地 Embedding 生成向量 | ✅ |
-| 持久化 | Chroma 向量数据库存储 | ✅ |
 | 智能问答 | 基于知识库的 RAG 问答 | ✅ |
 
 ## 快速开始
@@ -57,19 +57,69 @@ python3 sync_feishu_final.py
 python3 scripts/sync_all.py
 ```
 
-### 4. 向量化
+### 4. PDF 全文提取
 
 ```bash
-python3 build_index.py
+# 处理 pdf_temp/ 下的所有 PDF
+python3 scripts/scan_library.py
+
+# 输出：library/Full_xxx.md（带 # 标题修复的全文）
+# 原文件自动归档到 pdf_archive/
 ```
 
-### 5. 开始问答
+### 5. 向量化
 
 ```bash
-python3 ask_kai.py "如何提升个人能力？"
+python3 scripts/build_index.py
 ```
 
-## 使用流程
+### 6. 开始问答
+
+```bash
+python3 scripts/ask_kai.py "如何提升个人能力？"
+```
+
+## 内容同步工作流 V3.0
+
+### 6.1 飞书多维表同步
+
+```
+飞书多维表 → sync_feishu_final.py → KAI_Brain/00-Inbox/{platform}/
+     │
+     ├── 小红书 → xiaohongshu/ (清洗 + 元数据注入)
+     ├── 公众号 → wechat/ (清洗 + 元数据注入)
+     └── 抖音 → douyin/ (raw_mode，直接保存)
+```
+
+**触发条件：**
+- `Sync_Trigger` = true
+- `Sync_Status` ≠ "已同步"
+
+### 6.2 视频号逐字稿拆解
+
+```
+视频号文案 → 告诉 KAI "处理视频号逐字稿" → 05_Video_Analyze.md
+     → DeepSeek-R1 深度拆解 → KAI_Brain/00-Inbox/douyin/
+
+输出结构：
+├── 第一部分：🎭 逐字稿复盘（语气标注、金句高光）
+└── 第二部分：🧠 知识框架提炼（逻辑结构、行动建议）
+```
+
+### 6.3 PDF 全文提取
+
+```
+pdf_temp/ → scan_library.py → pdfplumber 提取 → GLM-4.6 排版
+     → KAI_Brain/00-Inbox/library/Full_xxx.md
+     → pdf_archive/ (原文件归档)
+
+特性：
+├── 纯文字 PDF：直接提取，修复断行
+├── 扫描版 PDF：OCR 识别（pytesseract）
+└── 超过 8 万字：自动截断
+```
+
+## API 配置
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
@@ -91,6 +141,7 @@ python3 ask_kai.py "如何提升个人能力？"
 | 文件 | 功能 | 使用方式 |
 |------|------|----------|
 | `sync_feishu_final.py` | 多平台同步（小红书/公众号/抖音） | `python3 sync_feishu_final.py` |
+| `scripts/scan_library.py` | PDF 全文提取（GLM-4.6） | `python3 scripts/scan_library.py` |
 | `scripts/sync_all.py` | 飞书云文档同步（旧版） | `python3 scripts/sync_all.py` |
 | `scripts/gen_index.py` | 生成知识库索引 | `python3 scripts/gen_index.py` |
 | `scripts/build_index.py` | 向量化并存储到 Chroma | `python3 scripts/build_index.py` |
@@ -101,7 +152,9 @@ python3 ask_kai.py "如何提升个人能力？"
 
 | 目录/文件 | 说明 |
 |-----------|------|
-| `knowledge_base/` | 同步后的 Markdown 文档 |
+| `KAI_Brain/00-Inbox/` | 收件箱（多平台同步内容） |
+| `KAI_Brain/00-Inbox/library/` | PDF 全文提取结果 |
+| `knowledge_base/` | 飞书云文档同步（归档） |
 | `chroma_db_data/` | Chroma 向量数据库 |
 | `docs_list.txt` | 飞书文档链接列表 |
 | `.sync_state.json` | 同步状态记录 |
@@ -111,7 +164,7 @@ python3 ask_kai.py "如何提升个人能力？"
 
 | 文件 | 说明 |
 |------|------|
-| `.env` | API 配置（需手动创建） |
+| `config/.env` | API 配置 |
 | `.env.example` | 配置模板 |
 | `requirements.txt` | Python 依赖 |
 
@@ -182,16 +235,26 @@ model_name = "shibing624/text2vec-base-chinese"
 
 ### LLM 配置
 
-支持多种 LLM API（通过 `.env` 配置）：
+支持多种 LLM API（通过 `config/.env` 配置）：
 
 ```env
-# MiniMax
+# DeepSeek（视频号逐字稿拆解）
+DEEPSEEK_API_KEY=sk-xxx
+DEEPSEEK_API_BASE=https://api.deepseek.com
+
+# 智谱 GLM（PDF 全文提取）
+ZHIPUAI_API_KEY=xxx
+
+# MiniMax（问答）
 OPENAI_API_BASE=https://api.minimax.chat/v1
 CHAT_MODEL=abab6.5s-chat
+```
 
-# DeepSeek
-OPENAI_API_BASE=https://api.deepseek.com/v1
-CHAT_MODEL=deepseek-chat
+### PDF 依赖安装
+
+```bash
+# PDF 提取 + OCR 识别
+pip3 install pdfplumber zhipuai pytesseract pillow
 ```
 
 ## 项目结构
@@ -199,25 +262,32 @@ CHAT_MODEL=deepseek-chat
 ```
 KAI/
 ├── sync_feishu_final.py    # 多平台同步脚本（小红书/公众号/抖音）
+├── prompts/
+│   ├── 000_KAI_Menu.md     # KAI 花名册
+│   ├── 01_Task_Decompose.md
+│   ├── 02_Biz_Hypothesis.md
+│   ├── 05_Demand_Verify.md
+│   └── 06_Video_Analyze.md # 视频号逐字稿拆解
 ├── scripts/
+│   ├── scan_library.py     # PDF 全文提取（GLM-4.6）
 │   ├── sync_all.py         # 飞书云文档同步（归档）
 │   ├── gen_index.py        # 索引生成
 │   ├── build_index.py      # 向量化脚本
 │   ├── ask_kai.py          # RAG 问答脚本
 │   └── legacy/             # 已归档脚本
-│       ├── sync_kai_atoms.py
-│       ├── clean_markdown.py
-│       └── check_docs.py
+├── config/
+│   └── .env                # API 配置
 ├── requirements.txt        # 依赖列表
-├── .env                    # API 配置
 ├── .env.example            # 配置模板
-├── docs_list.txt           # 文档链接列表
 ├── knowledge_base/         # Markdown 文档（飞书云文档）
 ├── KAI_Brain/              # 知识库主目录
 │   ├── 00-Inbox/           # 收件箱
 │   │   ├── xiaohongshu/    # 小红书同步
 │   │   ├── wechat/         # 公众号同步
-│   │   └── douyin/         # 抖音同步
+│   │   ├── douyin/         # 抖音/视频号
+│   │   ├── pdf_temp/       # PDF 待处理
+│   │   ├── pdf_archive/    # PDF 归档
+│   │   └── library/        # PDF 全文提取结果
 │   └── ...
 ├── chroma_db_data/         # 向量数据库
 └── 知识库索引.md           # 文档索引
@@ -288,6 +358,20 @@ KAI/
 - "自己下单" → "子女代付+关怀联动"
 
 ## 更新日志
+
+### v2.3 (2026-01-08) - 内容同步架构 V3.0
+
+**新增功能：**
+- 新增 `scripts/scan_library.py` PDF 全文提取脚本（GLM-4.6 排版）
+- 新增 `06_Video_Analyze.md` 视频号逐字稿拆解 Skill（DeepSeek-R1）
+- 新增抖音平台同步支持（raw_mode，直接保存）
+- 新增 `05_Demand_Verify.md` 需求验证系统
+
+**文档更新：**
+- 新增内容同步工作流 V3.0 架构图
+- 更新飞书多维表同步规范
+- 更新 API 配置（DeepSeek + GLM）
+- 更新项目结构图
 
 ### v2.2 (2026-01-08)
 
