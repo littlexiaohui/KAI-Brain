@@ -1,6 +1,6 @@
 # KAI 知识库 RAG 系统
 
-> 版本：v2.1 | 构建日期：2026-01-08
+> 版本：v2.2 | 构建日期：2026-01-08
 
 KAI 是一个基于飞书云文档的本地知识库 RAG (Retrieval-Augmented Generation) 系统，支持多平台文档同步、本地向量化存储和智能问答。
 
@@ -288,6 +288,17 @@ KAI/
 - "自己下单" → "子女代付+关怀联动"
 
 ## 更新日志
+
+### v2.2 (2026-01-08)
+
+- 新增 `06_Video_Analyze.md` Skill（视频号逐字稿分析）
+- 调整序号命名规范（05_Demand_Verify → 05，05_Video_Analyze → 06）
+- 清理空文件夹 `05-Drafts/Feishu_Sync/`
+
+### v2.1 (2026-01-07)
+
+- 新增抖音平台同步支持（按 FileName 命名文件）
+- 飞书同步路径调整为 `knowledge_base/05-Workbench/Feishu_Sync`
 
 ### v2.0 (2026-01-06)
 
