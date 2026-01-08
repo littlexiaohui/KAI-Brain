@@ -1,14 +1,14 @@
 # KAI 知识库 RAG 系统
 
-> 版本：v2.0 | 构建日期：2026-01-06
+> 版本：v2.1 | 构建日期：2026-01-08
 
-KAI 是一个基于飞书云文档的本地知识库 RAG (Retrieval-Augmented Generation) 系统，支持文档同步、本地向量化存储和智能问答。
+KAI 是一个基于飞书云文档的本地知识库 RAG (Retrieval-Augmented Generation) 系统，支持多平台文档同步、本地向量化存储和智能问答。
 
 ## 功能特性
 
 | 模块 | 功能 | 状态 |
 |------|------|------|
-| 文档同步 | 从飞书云文档同步 Markdown | ✅ |
+| 多平台同步 | 小红书、公众号、抖音 → KAI_Brain | ✅ |
 | 格式清理 | 自动修复标题、列表、空行等问题 | ✅ |
 | 向量化 | 本地 Embedding 生成向量 | ✅ |
 | 持久化 | Chroma 向量数据库存储 | ✅ |
@@ -50,11 +50,11 @@ CHAT_MODEL=abab6.5s-chat
 ### 3. 同步文档
 
 ```bash
-# 同步所有文档
-python3 sync_all.py
+# 同步多平台文档（小红书、公众号、抖音）
+python3 sync_feishu_final.py
 
-# 或测试单个文档
-TEST_DOC_TOKEN=xxx python3 sync_kai_atoms.py
+# 旧版飞书云文档同步（已归档）
+python3 scripts/sync_all.py
 ```
 
 ### 4. 向量化
@@ -90,13 +90,12 @@ python3 ask_kai.py "如何提升个人能力？"
 
 | 文件 | 功能 | 使用方式 |
 |------|------|----------|
-| `sync_all.py` | 批量同步飞书文档 | `python3 sync_all.py` |
-| `sync_kai_atoms.py` | 单文档同步测试 | `TEST_DOC_TOKEN=xxx python3 sync_kai_atoms.py` |
-| `clean_markdown.py` | Markdown 格式清理 | `python3 clean_markdown.py` |
-| `check_docs.py` | 检查文档标题结构 | `python3 check_docs.py` |
-| `gen_index.py` | 生成知识库索引 | `python3 gen_index.py` |
-| `build_index.py` | 向量化并存储到 Chroma | `python3 build_index.py` |
-| `ask_kai.py` | 知识库问答 | `python3 ask_kai.py "问题"` |
+| `sync_feishu_final.py` | 多平台同步（小红书/公众号/抖音） | `python3 sync_feishu_final.py` |
+| `scripts/sync_all.py` | 飞书云文档同步（旧版） | `python3 scripts/sync_all.py` |
+| `scripts/gen_index.py` | 生成知识库索引 | `python3 scripts/gen_index.py` |
+| `scripts/build_index.py` | 向量化并存储到 Chroma | `python3 scripts/build_index.py` |
+| `scripts/ask_kai.py` | 知识库问答 | `python3 scripts/ask_kai.py "问题"` |
+| `scripts/legacy/` | 已归档脚本 | 备查 |
 
 ### 数据目录
 
@@ -116,7 +115,26 @@ python3 ask_kai.py "如何提升个人能力？"
 | `.env.example` | 配置模板 |
 | `requirements.txt` | Python 依赖 |
 
-## 飞书文档同步规范
+## 飞书多维表同步规范
+
+### 支持平台
+
+| 平台 | 内容字段 | 文件名来源 | 特点 |
+|------|----------|------------|------|
+| 小红书 | `MD_Content` | title 字段 / 首句提取 | 需清洗格式、注入元数据 |
+| 公众号 | `MD_Content` | title 字段 / 首句提取 | 需清洗格式、注入元数据 |
+| 抖音 | `Output` | `FileName` 字段 | 直接保存，无需清洗 |
+
+### 同步流程
+
+```
+飞书多维表 → Sync_Trigger=True 触发 → 获取记录 → 筛选未同步 → 保存文件 → 更新 Sync_Status=已同步
+```
+
+### 触发条件
+
+- `Sync_Trigger` = true（触发同步）
+- `Sync_Status` ≠ "已同步"（避免重复）
 
 ### Block 类型映射
 
@@ -144,7 +162,11 @@ docs_list.txt → 提取 token → 去重 → 遍历同步 → 清理格式 → 
 
 **Q: 列表编号全是 `1. 1. 1.`？**
 - 原因：飞书 API 返回格式问题
-- 解决：`clean_markdown.py` 会自动修复
+- 解决：`scripts/legacy/clean_markdown.py` 会自动修复
+
+**Q: 抖音内容文件名不对？**
+- 确认多维表有 `FileName` 字段
+- 检查字段名大小写（飞书 API 返回的字段名是原始名称）
 
 ## RAG 系统架构
 
@@ -176,23 +198,28 @@ CHAT_MODEL=deepseek-chat
 
 ```
 KAI/
-├── ask_kai.py              # RAG 问答脚本
-├── build_index.py          # 向量化脚本
-├── sync_all.py             # 批量同步脚本
-├── sync_kai_atoms.py       # 单文档同步
-├── clean_markdown.py       # Markdown 清理
-├── check_docs.py           # 文档检查
-├── gen_index.py            # 索引生成
+├── sync_feishu_final.py    # 多平台同步脚本（小红书/公众号/抖音）
+├── scripts/
+│   ├── sync_all.py         # 飞书云文档同步（归档）
+│   ├── gen_index.py        # 索引生成
+│   ├── build_index.py      # 向量化脚本
+│   ├── ask_kai.py          # RAG 问答脚本
+│   └── legacy/             # 已归档脚本
+│       ├── sync_kai_atoms.py
+│       ├── clean_markdown.py
+│       └── check_docs.py
 ├── requirements.txt        # 依赖列表
 ├── .env                    # API 配置
 ├── .env.example            # 配置模板
 ├── docs_list.txt           # 文档链接列表
-├── knowledge_base/         # Markdown 文档
-│   ├── *.md               # 20个文档
+├── knowledge_base/         # Markdown 文档（飞书云文档）
+├── KAI_Brain/              # 知识库主目录
+│   ├── 00-Inbox/           # 收件箱
+│   │   ├── xiaohongshu/    # 小红书同步
+│   │   ├── wechat/         # 公众号同步
+│   │   └── douyin/         # 抖音同步
 │   └── ...
 ├── chroma_db_data/         # 向量数据库
-│   ├── chroma.sqlite3
-│   └── d6dd0072-.../
 └── 知识库索引.md           # 文档索引
 ```
 

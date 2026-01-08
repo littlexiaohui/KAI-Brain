@@ -1,6 +1,38 @@
-# 飞书云文档同步问题排查
+# 飞书 API 问题排查
 
-## 环境配置
+> **Version**: 2.0 | **更新日期**：2026-01-08
+
+## 多维表同步（当前方案）
+
+### 环境配置
+
+| 平台 | App ID | App Secret | Base ID | Table ID |
+|------|--------|------------|---------|----------|
+| 小红书 | `cli_a9bba125d9395bb6` | `6Evmvygsz5N85IrcEEtVkentcJJKg3H4` | `BWmIb8W7aaSDV5s4FhEc4SdRndf` | `tblbgrbuMF1m6jHg` |
+| 公众号 | `cli_a9bba125d9395bb6` | `6Evmvygsz5N85IrcEEtVkentcJJKg3H4` | `IZIAbzf8iazpLPsZgxHcQOKRnig` | `tblClytYsGIfR8v3` |
+| 抖音 | `cli_a9bba125d9395bb6` | `6Evmvygsz5N85IrcEEtVkentcJJKg3H4` | `GQw1bDCaVa5x5zsouJtcJEEYn3f` | `tbl7IUFYNP1bmuR3` |
+
+### 字段映射
+
+| 字段名 | 说明 |
+|--------|------|
+| `Sync_Trigger` | 布尔值，true 触发同步 |
+| `Sync_Status` | 同步状态，写入"已同步" |
+| `Source_URL` | 原始链接 |
+| `FileName` | 抖音文件名来源 |
+| `Output` | 抖音内容字段 |
+| `MD_Content` | 小红书/公众号内容字段 |
+
+### 已开通权限
+
+- `bitable:app` - 多维表读取
+- `bitable:record` - 记录读写
+
+---
+
+## 飞书云文档同步（旧方案，已归档）
+
+### 环境配置
 
 - **App ID**: `cli_a9c1e3d92538dbc7`
 - **App Secret**: `jne7sLkgTL8lD8ZX8Hdi0bdoMCFQrtdO`
@@ -8,7 +40,7 @@
 - **文件夹名称**: `KAI-知识原子库`
 - **文件夹位置**: 根目录共享文件夹
 
-## 已开通权限
+### 已开通权限
 
 已在飞书开放平台开通以下权限：
 - `drive:file` - 云盘文件读写
