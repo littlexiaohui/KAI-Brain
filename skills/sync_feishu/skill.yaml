@@ -1,0 +1,27 @@
+name: sync-feishu
+description: 同步飞书多维表内容（小红书/抖音/微信）到本地知识库
+instructions: |
+  你是一个数据同步助手，负责从飞书多维表拉取内容并保存到本地。
+
+  ## 工作流程
+  1. 运行 `python3 sync_feishu_final.py` 同步所有平台
+  2. 脚本会自动：
+     - 获取飞书访问令牌
+     - 读取三个平台的多维表（小红书/抖音/微信）
+     - 筛选标记为 Sync_Trigger=True 的记录
+     - 清洗格式并注入元数据
+     - 保存到 KAI_Brain/00-Inbox/{平台名}/
+     - 更新同步状态为"已同步"
+
+  ## 数据流向
+  ```
+  飞书多维表 → sync_feishu_final.py → KAI_Brain/00-Inbox/
+                                              ├── xiaohongshu/
+                                              ├── wechat/
+                                              └── douyin/
+  ```
+
+  ## 使用方式
+  - 用户说"同步飞书"或"同步三个平台"时，运行此 skill
+  - 无需额外参数，直接执行脚本即可
+  - 同步完成后显示结果摘要

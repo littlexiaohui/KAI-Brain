@@ -1,0 +1,19 @@
+# 飞书同步 Skill
+
+## 功能说明
+从飞书多维表自动抓取三个平台（小红书、抖音、微信公众号）的内容，存入本地知识库。
+
+## 数据源配置
+| 平台 | 文件夹 | 内容字段 |
+|------|--------|----------|
+| 小红书 | 00-Inbox/xiaohongshu | MD_Content |
+| 抖音 | 00-Inbox/douyin | Output |
+| 微信公众号 | 00-Inbox/wechat | MD_Content |
+
+## 同步条件
+- 飞书记录需满足：Sync_Trigger=True 且 Sync_Status≠已同步
+
+## 执行命令
+```bash
+python3 sync_feishu_final.py
+```

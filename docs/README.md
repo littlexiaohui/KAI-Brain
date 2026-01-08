@@ -1,6 +1,6 @@
 # KAI 知识库 RAG 系统
 
-> 版本：v2.3 | 构建日期：2026-01-08
+> 版本：v3.3 | 构建日期：2026-01-08
 
 KAI 是一个基于多源内容的本地知识库 RAG 系统，支持多平台文档同步、AI 内容拆解和 PDF 全文提取。
 
@@ -295,10 +295,142 @@ KAI/
 
 ## 知识库统计
 
-- **文档数量**：20 篇
-- **向量片段**：103 个
+- **文档数量**：93 篇
+- **向量片段**：805 个
 - **Embedding 维度**：768
 - **向量数据库**：Chroma
+
+## V3.3 切分策略 (Chunking Strategy)
+
+> 2026-01-08 更新：基于 Markdown 结构的递归切分
+
+### 问题背景
+
+❌ **旧策略问题**：只按字符数切分（如每 500 字切一刀），会把完整段落腰斩，导致语义破碎。
+
+✅ **新策略**：基于 Markdown 结构的递归切分，利用标题层级保证每个 Chunk 都是完整的知识点。
+
+### 混合切分策略
+
+**第一层：按标题切分（保证语义完整性）**
+
+```python
+from langchain.text_splitter import MarkdownHeaderTextSplitter
+
+headers_to_split_on = [
+    ("#", "Header 1"),      # 一级标题 = 大章节
+    ("##", "Header 2"),     # 二级标题 = 小节
+    ("###", "Header 3"),    # 三级标题 = 子节
+]
+
+markdown_splitter = MarkdownHeaderTextSplitter(headers_to_split_on=headers_to_split_on)
+md_header_splits = markdown_splitter.split_text(markdown_text)
+```
+
+**第二层：递归细切（防止单章过长）**
+
+```python
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=500,       # 每个块约 300-500 中文字
+    chunk_overlap=50,     # 重叠 50 字，防止上下文丢失
+    separators=["\n\n", "\n", "。", "！", "？"]  # 优先按段落和句子切
+)
+```
+
+### 配置参数
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| CHUNK_SIZE | 500 | 每块约 300-500 中文字 |
+| CHUNK_OVERLAP | 50 | 段落间重叠，防止上下文丢失 |
+| MAX_HEADER_LEVEL | 3 | 最多识别到三级标题 |
+
+### 元数据增强
+
+切分后的每个 Chunk 自动带上层级路径：
+
+```yaml
+metadata:
+  source: 文件名.md
+  filepath: /path/to/file.md
+  Header 1: 第一章 标题
+  Header 2: 1.1 小节标题
+  Header 3: 1.1.1 子节标题
+```
+
+### 效果对比
+
+| 维度 | V3.2 (旧) | V3.3 (新) |
+|------|-----------|-----------|
+| 切分依据 | 字符数 (800字) | 标题结构 + 递归细切 |
+| 片段数 | ~600 | **805** |
+| Chunk 完整性 | 可能腰斩段落 | 语义完整 |
+| 元数据 | 基础 | + Header 路径 |
+
+### 相关文件
+
+| 文件 | 功能 |
+|------|------|
+| `scripts/build_index.py` | 向量化脚本（已集成新切分策略） |
+| `docs/03_Chunking_Strategy.md` | 切分策略详细文档 |
+
+## V3.3 Rerank 重排序策略
+
+> 2026-01-08 更新：引入 Rerank 提升检索质量
+
+### 问题背景
+
+❌ **现状**：Top-K 向量检索（类似模糊搜索），只看大概长得像不像。
+
+**痛点示例**：
+- 问：`GVM 公式是什么？`
+- 向量检索可能返回带有 G、V、M 字母的无关段落
+- 真正包含公式的文档反而排在后面
+
+### 解决方案
+
+✅ **升级**：Top-K (20) → Rerank (精排) → Top-N (5)
+
+```
+用户问题
+    │
+    ├── 粗排：向量检索 Top-20（覆盖面广）
+    │       └── embedding：shibing624/text2vec-base-chinese
+    │
+    └── 精排：Rerank 模型打分排序（精准度高）
+            └── 模型：BAAI/bge-reranker-v2-m3
+            └── 输出：Top-5 最相关文档
+```
+
+### 配置参数
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| RERANK_TOP_K | 20 | 粗排候选数 |
+| RERANK_TOP_N | 5 | 精排结果数 |
+| RERANK_MODEL | BAAI/bge-reranker-v2-m3 | 模型名称 |
+
+### 依赖安装
+
+```bash
+pip3 install FlagEmbedding
+```
+
+### 效果对比
+
+| 阶段 | 问"GVM 公式" |
+|------|--------------|
+| **粗排 Top-5** | 包含 G、V、M 字母的无关段落排第1 |
+| **精排 Top-5** | GVM 公式定义排第1 |
+
+### 相关文件
+
+| 文件 | 功能 |
+|------|------|
+| `scripts/ask_kai.py` | 问答脚本（已集成 Rerank） |
+| `docs/04_Rerank_Strategy.md` | Rerank 策略详细文档 |
 
 ## 核心方法论
 
@@ -359,7 +491,36 @@ KAI/
 
 ## 更新日志
 
-### v2.3 (2026-01-08) - 内容同步架构 V3.0
+### v3.3 (2026-01-08) - 切片策略 + Rerank 优化
+
+**核心优化一：切片策略**
+- 新增 `docs/03_Chunking_Strategy.md` 切分策略文档
+- 更新 `scripts/build_index.py` 实现混合切分策略
+- 第一层：MarkdownHeaderTextSplitter 按标题切分
+- 第二层：RecursiveCharacterTextSplitter 递归细切
+- 修复路径配置 PROJECT_ROOT
+- 修复递归扫描子目录 (`**/*.md`)
+
+**核心优化二：Rerank 重排序**
+- 新增 `docs/04_Rerank_Strategy.md` Rerank 策略文档
+- 更新 `scripts/ask_kai.py` 集成 Rerank 模块
+- Top-K (20) → Rerank → Top-N (5)
+- 模型：BAAI/bge-reranker-v2-m3
+- 安装依赖：`pip3 install FlagEmbedding`
+
+**PDF 质量约束：**
+- 新增 `scripts/check_pdf_text.py` PDF 文本图层检测
+- 全图片 PDF 禁止入库，自动拦截并提示
+- `scripts/scan_library.py` 集成文本检测逻辑
+
+**新增文件：**
+- `docs/03_Chunking_Strategy.md` - 切分策略详细文档
+- `docs/04_Rerank_Strategy.md` - Rerank 策略详细文档
+- `scripts/check_pdf_text.py` - PDF 文本检测工具
+- `scripts/scan_library.py` - V3.4 PDF 全文提取
+- `skills/sync_feishu/` - 飞书同步 Skill
+
+### v3.0 (2026-01-08) - 内容同步架构 V3.0
 
 **新增功能：**
 - 新增 `scripts/scan_library.py` PDF 全文提取脚本（GLM-4.6 排版）

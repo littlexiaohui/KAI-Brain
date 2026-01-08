@@ -3,13 +3,17 @@
 向量化脚本：将 knowledge_base 下的所有 .md 文件向量化并存储到 Chroma
 
 使用方法：
-    python3 build_index.py
+    python3 scripts/build_index.py
 
 依赖：
     - langchain
     - langchain-community
     - chromadb
     - langchain-openai (用于 OpenAI 兼容的 embedding 接口)
+
+切分策略 (V3.3):
+    - 第一层：按 Markdown 标题切分（保证语义完整性）
+    - 第二层：递归细切（防止单章过长）
 """
 
 import os
@@ -19,16 +23,18 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from langchain_community.document_loaders import TextLoader, UnstructuredMarkdownLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-# OpenAIEmbeddings 已不再需要，使用本地 HuggingFace 模型
+from langchain.text_splitter import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 
 # ========== 配置 ==========
-KNOWLEDGE_BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "knowledge_base")
-PERSIST_DIR = "./chroma_db_data"
+# 知识库目录（相对于项目根目录）
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+KNOWLEDGE_BASE_DIR = os.path.join(PROJECT_ROOT, "knowledge_base")
+PERSIST_DIR = os.path.join(PROJECT_ROOT, "chroma_db_data")
 
-CHUNK_SIZE = 800
-CHUNK_OVERLAP = 100
+# 切分参数 (V3.3 混合切分策略)
+CHUNK_SIZE = 500       # 每个块约 300-500 中文字
+CHUNK_OVERLAP = 50     # 重叠 50 字，防止上下文丢失
 
 # 加载环境变量
 load_dotenv()
@@ -70,9 +76,10 @@ def get_embedding_model():
 
 def load_markdown_files(base_dir):
     """
-    加载目录下所有 .md 文件
+    递归加载目录下所有 .md 文件
     """
-    md_files = glob.glob(os.path.join(base_dir, "*.md"))
+    # 递归扫描所有子目录
+    md_files = glob.glob(os.path.join(base_dir, "**/*.md"), recursive=True)
     logger.info(f"找到 {len(md_files)} 个 .md 文件")
 
     documents = []
@@ -104,30 +111,45 @@ def load_markdown_files(base_dir):
 
 def split_documents(documents):
     """
-    使用 RecursiveCharacterTextSplitter 切分文档
+    V3.3 混合切分策略：MarkdownHeaderTextSplitter + RecursiveCharacterTextSplitter
 
-    优先按 Markdown 标题切分，保持语义完整
+    第一层：按 Markdown 标题切分（保证语义完整性）
+    第二层：递归细切（防止单章过长）
     """
-    # 分隔符优先级：Markdown 标题 > 段落 > 句子 > 单词
-    separators = [
-        "\n## ",      # 二级标题
-        "\n### ",     # 三级标题
-        "\n",         # 段落
-        " ",          # 句子边界
-        ""            # 单词边界
+    # 1. 第一层：按标题切分（保留层级元数据）
+    headers_to_split_on = [
+        ("#", "Header 1"),      # 一级标题
+        ("##", "Header 2"),     # 二级标题
+        ("###", "Header 3"),    # 三级标题
     ]
 
-    splitter = RecursiveCharacterTextSplitter(
-        separators=separators,
+    # 先按标题切分
+    markdown_splitter = MarkdownHeaderTextSplitter(
+        headers_to_split_on=headers_to_split_on
+    )
+    header_splits = []
+    for doc in documents:
+        splits = markdown_splitter.split_text(doc.page_content)
+        for split in splits:
+            # 保留原有元数据 + 添加标题元数据
+            split.metadata = {**doc.metadata, **split.metadata}
+            split.metadata['filepath'] = doc.metadata.get('filepath', '')
+            header_splits.append(split)
+
+    logger.info(f"第一层按标题切分: {len(header_splits)} 个片段")
+
+    # 2. 第二层：递归细切（防止单章过长）
+    text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
+        separators=["\n\n", "\n", "。", "！", "？", " "],  # 优先按段落和句子切
         length_function=len,
         add_start_index=True
     )
 
-    chunks = splitter.split_documents(documents)
+    chunks = text_splitter.split_documents(header_splits)
 
-    logger.info(f"切分为 {len(chunks)} 个片段")
+    logger.info(f"第二层递归细切后: {len(chunks)} 个片段")
     return chunks
 
 
