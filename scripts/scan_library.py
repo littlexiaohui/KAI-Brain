@@ -19,7 +19,7 @@ INPUT_FOLDER = "/Users/huangkai/Documents/KAI_Brain/00-Inbox/pdf_temp"
 OUTPUT_FOLDER = "/Users/huangkai/Documents/KAI_Brain/00-Inbox/library"
 ARCHIVE_FOLDER = "/Users/huangkai/Documents/KAI_Brain/00-Inbox/pdf_archive"
 
-MODEL_NAME = "glm-4-flash"
+MODEL_NAME = "glm-4.6"
 # ========================================
 
 # 加载 API Key
