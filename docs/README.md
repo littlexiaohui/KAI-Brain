@@ -432,6 +432,63 @@ pip3 install FlagEmbedding
 | `scripts/ask_kai.py` | 问答脚本（已集成 Rerank） |
 | `docs/04_Rerank_Strategy.md` | Rerank 策略详细文档 |
 
+## V5.1 YAML Frontmatter 四大金刚
+
+> 2026-01-08 更新：元数据标准化
+
+### 四大金刚字段
+
+| 字段 | 说明 | 示例 |
+|------|------|------|
+| `source` | 来源平台 | `xiaohongshu`, `wechat`, `douyin` |
+| `created_at` | 创建日期 | `2025-01-02` |
+| `author` | 作者 | `KAI`, `huangkai` |
+| `content_type` | 内容类型 | `post`, `article`, `script`, `doc` |
+
+### Frontmatter 格式
+
+```markdown
+---
+source: xiaohongshu
+created_at: "2025-01-02"
+author: "KAI"
+content_type: post
+---
+
+# 正文内容
+...
+```
+
+### 实现逻辑
+
+**写入端 (sync_feishu_final.py V5.1)**：
+- 同步时自动提取飞书字段
+- 生成 YAML Frontmatter 写入文件头
+
+**读取端 (build_index.py V5.1)**：
+- 使用 `python-frontmatter` 解析
+- 元数据注入每个 Chunk
+- Chroma 向量库支持元数据过滤
+
+### 依赖安装
+
+```bash
+pip3 install python-frontmatter
+```
+
+### 效果
+
+- 向量检索支持按平台/时间/作者/类型过滤
+- Obsidian 插件可直接读取 Frontmatter
+- 每个 Chunk 都携带完整元数据
+
+### 相关文件
+
+| 文件 | 功能 |
+|------|------|
+| `sync_feishu_final.py` | 同步脚本（已集成 Frontmatter 生成） |
+| `scripts/build_index.py` | 向量化脚本（已集成 Frontmatter 解析） |
+
 ## 核心方法论
 
 ### 人货场匹配与信任构建模型
@@ -519,6 +576,24 @@ pip3 install FlagEmbedding
 - `scripts/check_pdf_text.py` - PDF 文本检测工具
 - `scripts/scan_library.py` - V3.4 PDF 全文提取
 - `skills/sync_feishu/` - 飞书同步 Skill
+
+### v5.1 (2026-01-08) - Frontmatter 四大金刚元数据
+
+**新增功能：**
+- 新增 YAML Frontmatter 四大金刚元数据字段：
+  - `source`: 来源平台 (xiaohongshu/wechat/douyin)
+  - `created_at`: 创建日期
+  - `author`: 作者
+  - `content_type`: 内容类型 (post/article/script/doc)
+- `sync_feishu_final.py` V5.1: 同步时自动生成 Frontmatter
+- `scripts/build_index.py` V5.1: 解析 Frontmatter 并注入向量块元数据
+
+**技术实现：**
+- 使用 `python-frontmatter` 库解析 Frontmatter
+- 向量块保留完整元数据，支持检索后过滤
+
+**依赖更新：**
+- `pip install python-frontmatter`
 
 ### v3.0 (2026-01-08) - 内容同步架构 V3.0
 

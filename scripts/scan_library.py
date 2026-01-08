@@ -137,12 +137,32 @@ def format_content(content, filename, char_count=0):
     from datetime import datetime
     today = datetime.now().strftime("%Y-%m-%d")
 
+    # V5.1 四大金刚 Frontmatter
+    frontmatter = f"""---
+source: library
+created_at: "{today}"
+author: ""
+content_type: doc
+---
+
+"""
+
     if char_count > 8000:
         # 大文本分批排版
         print(f"   ⚠️ 内容较长 ({char_count} 字)，简化排版...")
         prompt = f"""请将以下文字整理成 Markdown 格式，添加适当标题，保留所有内容：
 
 {content[:6000]}"""
+        try:
+            response = client.chat.completions.create(
+                model=MODEL_FORMAT,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+            )
+            return frontmatter + response.choices[0].message.content
+        except Exception as e:
+            print(f"   ⚠️ 排版失败: {e}")
+            return frontmatter + f"# {filename}\n\n{content}"
     else:
         prompt = f"""
 # Role
@@ -157,13 +177,8 @@ def format_content(content, filename, char_count=0):
 3. 修复格式、表格、列表
 4. 保留所有内容，不要总结
 
-# Meta Data
-> 📂 来源：{filename}
-> 🏷️ 标签：#PDF #文字版
-> 📅 日期：{today}
-> 📊 字数：{char_count}
-
----
+# Output Format
+直接输出内容，不要包含 Frontmatter（我已经生成好了）。
 
 # 内容
 {content}
@@ -175,10 +190,11 @@ def format_content(content, filename, char_count=0):
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
         )
-        return response.choices[0].message.content
+        formatted_body = response.choices[0].message.content
+        return frontmatter + formatted_body
     except Exception as e:
         print(f"   ⚠️ 排版失败: {e}")
-        return f"# {filename}\n\n{content}"
+        return frontmatter + f"# {filename}\n\n{content}"
 
 
 def sanitize_filename(name):

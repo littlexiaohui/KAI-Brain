@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-KAI 系统 ETL 实战脚本 (V5.0) - 多平台通用版
+KAI 系统 ETL 实战脚本 (V5.1) - 多平台通用版
 从飞书多维表读取 AI 生成的内容，清洗格式后同步到本地
+新增功能：YAML Frontmatter 元数据写入 (source, created_at, author, content_type)
 
 使用说明：
 1. 运行: python3 sync_feishu_final.py
@@ -11,6 +12,7 @@ KAI 系统 ETL 实战脚本 (V5.0) - 多平台通用版
 import requests
 import os
 from datetime import datetime
+import time as time_module
 
 # ============== 加载环境变量 ==============
 _env_loaded = False
@@ -31,6 +33,7 @@ for _env_file in [".env", "../.env"]:
 SOURCES = [
     {
         "name": "小红书",
+        "type": "xiaohongshu",
         "app_id": "cli_a9bba125d9395bb6",
         "app_secret": "6Evmvygsz5N85IrcEEtVkentcJJKg3H4",
         "base_id": "BWmIb8W7aaSDV5s4FhEc4SdRndf",
@@ -41,6 +44,7 @@ SOURCES = [
     },
     {
         "name": "公众号",
+        "type": "wechat",
         "app_id": "cli_a9bba125d9395bb6",
         "app_secret": "6Evmvygsz5N85IrcEEtVkentcJJKg3H4",
         "base_id": "IZIAbzf8iazpLPsZgxHcQOKRnig",
@@ -51,6 +55,7 @@ SOURCES = [
     },
     {
         "name": "抖音",
+        "type": "douyin",
         "app_id": "cli_a9bba125d9395bb6",
         "app_secret": "6Evmvygsz5N85IrcEEtVkentcJJKg3H4",
         "base_id": "GQw1bDCaVa5x5zsouJtcJEEYn3f",
@@ -230,8 +235,84 @@ def inject_metadata(text, url):
     return text
 
 
-def save_to_file(content, filename, save_dir):
-    """保存文件到本地"""
+# ============== V5.1 新增：YAML Frontmatter 生成 ==============
+def generate_frontmatter(fields, source_config):
+    """
+    生成符合 KAI 标准的 YAML Frontmatter (四大金刚)
+
+    Args:
+        fields: 飞书记录的 fields 字典
+        source_config: 数据源配置
+
+    Returns:
+        YAML Frontmatter 字符串
+    """
+    # 1. Source (来源) - 使用 type 字段（英文标识符）
+    source_type = source_config.get('type', source_config['name'])
+
+    # 抖音特殊处理：source 从 Source_URL 字段获取
+    if source_type == 'douyin' and 'Source_URL' in fields and fields.get('Source_URL'):
+        source = fields.get('Source_URL')
+    else:
+        source = source_type
+
+    # 2. Created_at (时间)
+    # 尝试多种可能的字段名
+    date_str = None
+    date_fields = ['创建时间', '日期', 'Date', 'created_time', 'createdAt']
+    for field_name in date_fields:
+        if field_name in fields and fields.get(field_name):
+            date_val = fields.get(field_name)
+            # 处理毫秒时间戳
+            if isinstance(date_val, (int, float)):
+                date_str = datetime.fromtimestamp(date_val / 1000).strftime('%Y-%m-%d')
+            elif isinstance(date_val, str):
+                # 尝试解析日期字符串
+                try:
+                    # 尝试 ISO 格式
+                    dt = datetime.fromisoformat(date_val.replace('Z', '+00:00'))
+                    date_str = dt.strftime('%Y-%m-%d')
+                except:
+                    date_str = date_val[:10]  # 取前10字符 YYYY-MM-DD
+            break
+
+    if not date_str:
+        date_str = datetime.now().strftime('%Y-%m-%d')
+
+    # 3. Author (作者)
+    author = fields.get('作者') or fields.get('Author') or 'KAI'
+
+    # 4. Content_Type (类型)
+    type_map = {
+        'xiaohongshu': 'post',
+        'wechat': 'article',
+        'douyin': 'script',
+        'library': 'doc'
+    }
+    content_type = type_map.get(source_type, 'note')
+
+    # 生成 YAML
+    frontmatter = f"""---
+source: {source}
+created_at: "{date_str}"
+author: "{author}"
+content_type: {content_type}
+---
+
+"""
+    return frontmatter
+
+
+def save_to_file(content, filename, save_dir, frontmatter=""):
+    """
+    保存文件到本地，支持 Frontmatter
+
+    Args:
+        content: 文件正文内容
+        filename: 文件名
+        save_dir: 保存目录
+        frontmatter: YAML Frontmatter 字符串（可选）
+    """
     safe_filename = sanitize_filename(filename)
     if not safe_filename.endswith(".md"):
         safe_filename += ".md"
@@ -239,6 +320,10 @@ def save_to_file(content, filename, save_dir):
     filepath = os.path.join(save_dir, safe_filename)
 
     with open(filepath, "w", encoding="utf-8") as f:
+        # 写入 Frontmatter（如果有）
+        if frontmatter:
+            f.write(frontmatter)
+        # 写入正文
         f.write(content)
 
     return filepath
@@ -327,8 +412,11 @@ def sync_source(source_config):
             cleaned = clean_code_block(raw_content)
             final_content = inject_metadata(cleaned, url)
 
-        # 保存
-        filepath = save_to_file(final_content, title, save_dir)
+        # V5.1 新增：生成 Frontmatter
+        frontmatter = generate_frontmatter(fields, source_config)
+
+        # 保存（传入 Frontmatter）
+        filepath = save_to_file(final_content, title, save_dir, frontmatter)
         print(f"   ✅ 已保存: {filepath}")
 
         # 更新状态
@@ -346,7 +434,7 @@ def sync_source(source_config):
 def main():
     """主函数"""
     print("=" * 50)
-    print("KAI 多平台数据同步 (V5.0)")
+    print("KAI 多平台数据同步 (V5.1)")
     print("=" * 50)
 
     try:

@@ -10,10 +10,17 @@
     - langchain-community
     - chromadb
     - langchain-openai (用于 OpenAI 兼容的 embedding 接口)
+    - python-frontmatter (V5.1 用于解析 Frontmatter)
 
 切分策略 (V3.3):
     - 第一层：按 Markdown 标题切分（保证语义完整性）
     - 第二层：递归细切（防止单章过长）
+
+元数据 (V5.1 四大金刚):
+    - source: 来源平台 (xiaohongshu/wechat/douyin)
+    - created_at: 创建日期
+    - author: 作者
+    - content_type: 内容类型 (post/article/script/doc)
 """
 
 import os
@@ -35,6 +42,9 @@ PERSIST_DIR = os.path.join(PROJECT_ROOT, "chroma_db_data")
 # 切分参数 (V3.3 混合切分策略)
 CHUNK_SIZE = 500       # 每个块约 300-500 中文字
 CHUNK_OVERLAP = 50     # 重叠 50 字，防止上下文丢失
+
+# V5.1 Frontmatter 四大金刚字段
+FRONTMATTER_FIELDS = ['source', 'created_at', 'author', 'content_type']
 
 # 加载环境变量
 load_dotenv()
@@ -77,7 +87,10 @@ def get_embedding_model():
 def load_markdown_files(base_dir):
     """
     递归加载目录下所有 .md 文件
+    V5.1 新增：解析 YAML Frontmatter 四大金刚字段
     """
+    import frontmatter
+
     # 递归扫描所有子目录
     md_files = glob.glob(os.path.join(base_dir, "**/*.md"), recursive=True)
     logger.info(f"找到 {len(md_files)} 个 .md 文件")
@@ -87,20 +100,29 @@ def load_markdown_files(base_dir):
     for file_path in md_files:
         filename = os.path.basename(file_path)
         try:
-            # 使用 TextLoader 加载 markdown
-            loader = TextLoader(file_path, encoding="utf-8")
-            docs = loader.load()
+            # V5.1 使用 python-frontmatter 解析 Frontmatter
+            with open(file_path, 'r', encoding='utf-8') as f:
+                post = frontmatter.load(f)
 
-            # 添加文件元数据
-            for doc in docs:
-                doc.metadata = {
-                    "source": filename,
-                    "filepath": file_path,
-                    "filename": filename
-                }
+            # 获取 Frontmatter 元数据（四大金刚）
+            fm_metadata = post.metadata
 
-            documents.extend(docs)
-            logger.info(f"  ✓ 加载: {filename}")
+            # 基础元数据
+            metadata = {
+                "source": fm_metadata.get('source', 'unknown'),
+                "filepath": file_path,
+                "filename": filename,
+                "created_at": fm_metadata.get('created_at', ''),
+                "author": fm_metadata.get('author', 'KAI'),
+                "content_type": fm_metadata.get('content_type', 'note')
+            }
+
+            # 创建 Document
+            from langchain.schema import Document
+            doc = Document(page_content=post.content, metadata=metadata)
+
+            documents.append(doc)
+            logger.info(f"  ✓ 加载: {filename} [{metadata['source']}]")
 
         except Exception as e:
             logger.warning(f"  ✗ 加载失败 {filename}: {e}")
