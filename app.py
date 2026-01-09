@@ -9,9 +9,10 @@ import streamlit as st
 import sys
 import os
 
-# 添加项目根目录到路径
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(PROJECT_ROOT, "scripts", "kai_engine"))
+# 添加 kai_engine 到路径
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+KAI_ENGINE_DIR = os.path.join(CURRENT_DIR, "scripts", "kai_engine")
+sys.path.insert(0, KAI_ENGINE_DIR)
 
 from brain import KAIBrain
 
