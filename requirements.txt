@@ -4,7 +4,7 @@
 # 基础依赖
 requests>=2.31.0
 python-dotenv>=1.0.0
-markdown>=4.0.0
+markdown>=3.0,<3.12
 
 # Web UI
 streamlit>=1.28.0
